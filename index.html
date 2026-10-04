@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#136f63" />
+    <title>手机账本</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="手机账本首页">
+          <span class="brand-mark">账</span>
+          <span>手机账本</span>
+        </a>
+        <div class="topbar-actions">
+          <button class="icon-button" id="new-bill" type="button" aria-label="新建账单" data-tooltip="新建账单">
+            <span aria-hidden="true">+</span>
+          </button>
+          <button class="icon-button" id="history-toggle" type="button" aria-label="历史账单" data-tooltip="历史账单">
+            <span aria-hidden="true">历</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="page-heading">
+        <div>
+          <p class="eyebrow">销售 / 退货录入</p>
+          <h1>新账单</h1>
+        </div>
+        <p class="bill-state" id="save-state" aria-live="polite">未保存</p>
+      </section>
+
+      <section class="customer-section" aria-labelledby="customer-title">
+        <h2 id="customer-title">客户信息</h2>
+        <div class="customer-form">
+          <label>
+            <span>客户姓名</span>
+            <input id="customer-name" type="text" placeholder="输入客户姓名" autocomplete="name" />
+          </label>
+          <label>
+            <span>开单日期</span>
+            <input id="bill-date" type="date" />
+          </label>
+          <label class="bill-no-field">
+            <span>单号</span>
+            <input id="bill-number" type="text" placeholder="自动生成" />
+          </label>
+        </div>
+      </section>
+
+      <section class="items-section" aria-labelledby="items-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="items-title">商品明细</h2>
+            <p>数量为负数时，自动按退货计入。</p>
+          </div>
+          <button class="add-line" id="add-line" type="button">添加一行</button>
+        </div>
+
+        <div class="items-table-wrap">
+          <table class="items-table">
+            <thead>
+              <tr>
+                <th scope="col">手机型号</th>
+                <th scope="col" class="numeric">单价</th>
+                <th scope="col" class="numeric">数量</th>
+                <th scope="col" class="numeric">金额</th>
+                <th scope="col"><span class="sr-only">操作</span></th>
+              </tr>
+            </thead>
+            <tbody id="items-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="summary-section" aria-labelledby="summary-title">
+        <div class="summary-heading">
+          <div>
+            <h2 id="summary-title">型号汇总</h2>
+            <p>相同型号自动合并计算。</p>
+          </div>
+          <span class="line-count" id="line-count">0 条明细</span>
+        </div>
+        <div class="model-summary" id="model-summary" aria-live="polite"></div>
+        <div class="grand-total">
+          <div>
+            <span>本单合计</span>
+            <small id="total-quantity">共 0 台</small>
+          </div>
+          <strong id="grand-total">¥0.00</strong>
+        </div>
+      </section>
+
+      <div class="action-bar">
+        <button class="secondary-action" id="print-bill" type="button">打印 / 导出</button>
+        <button class="primary-action" id="save-bill" type="button">保存账单</button>
+      </div>
+    </main>
+
+    <aside class="history-panel" id="history-panel" aria-labelledby="history-title" aria-hidden="true">
+      <div class="history-header">
+        <div>
+          <p class="eyebrow">本机记录</p>
+          <h2 id="history-title">历史账单</h2>
+        </div>
+        <button class="icon-button" id="close-history" type="button" aria-label="关闭历史账单">×</button>
+      </div>
+      <div class="history-list" id="history-list"></div>
+    </aside>
+    <div class="scrim" id="scrim" hidden></div>
+    <template id="item-row-template">
+      <tr>
+        <td data-label="手机型号"><input class="model-input" type="text" placeholder="如：iPhone 16 Pro" aria-label="手机型号" /></td>
+        <td data-label="单价" class="numeric"><input class="price-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" aria-label="单价" /></td>
+        <td data-label="数量" class="numeric"><input class="quantity-input" type="number" inputmode="decimal" step="1" placeholder="0" aria-label="数量" /></td>
+        <td data-label="金额" class="amount-cell">¥0.00</td>
+        <td class="delete-cell"><button class="delete-line" type="button" aria-label="删除本行" data-tooltip="删除本行">删除</button></td>
+      </tr>
+    </template>
+    <script src="app.js"></script>
+  </body>
+</html>
