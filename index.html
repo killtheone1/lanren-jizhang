@@ -64,8 +64,8 @@
             <thead>
               <tr>
                 <th scope="col">手机型号</th>
-                <th scope="col" class="numeric">单价</th>
                 <th scope="col" class="numeric">数量</th>
+                <th scope="col" class="numeric">单价</th>
                 <th scope="col" class="numeric">金额</th>
                 <th scope="col"><span class="sr-only">操作</span></th>
               </tr>
@@ -112,9 +112,9 @@
     <div class="scrim" id="scrim" hidden></div>
     <template id="item-row-template">
       <tr>
-        <td data-label="手机型号"><input class="model-input" type="text" placeholder="如：iPhone 16 Pro" aria-label="手机型号" /></td>
+        <td data-label="手机型号"><select class="model-select" aria-label="手机型号"></select></td>
+        <td data-label="数量" class="numeric"><div class="quantity-field"><input class="quantity-input" type="number" inputmode="decimal" step="1" placeholder="0" aria-label="数量" /><button class="return-toggle" type="button" aria-pressed="false">退货</button></div></td>
         <td data-label="单价" class="numeric"><input class="price-input" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" aria-label="单价" /></td>
-        <td data-label="数量" class="numeric"><input class="quantity-input" type="number" inputmode="decimal" step="1" placeholder="0" aria-label="数量" /></td>
         <td data-label="金额" class="amount-cell">¥0.00</td>
         <td class="delete-cell"><button class="delete-line" type="button" aria-label="删除本行" data-tooltip="删除本行">删除</button></td>
       </tr>

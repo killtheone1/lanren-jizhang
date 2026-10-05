@@ -1,4 +1,5 @@
 const storageKey = "phone-ledger-bills-v1";
+const modelsKey = "phone-ledger-models-v1";
 const body = document.querySelector("#items-body");
 const rowTemplate = document.querySelector("#item-row-template");
 const customerName = document.querySelector("#customer-name");
@@ -14,7 +15,12 @@ const historyList = document.querySelector("#history-list");
 const scrim = document.querySelector("#scrim");
 let activeSavedId = null;
 
-function today() { return new Date().toISOString().slice(0, 10); }
+function today() {
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
 function createBillNumber() { return `XS${new Date().toISOString().replace(/[-:T.Z]/g, "").slice(2, 12)}`; }
 function asNumber(value) { const parsed = Number.parseFloat(value); return Number.isFinite(parsed) ? parsed : 0; }
 function money(value) { return new Intl.NumberFormat("zh-CN", { style: "currency", currency: "CNY", minimumFractionDigits: 2 }).format(value); }
@@ -22,23 +28,85 @@ function formatQuantity(value) { return Number.isInteger(value) ? value : value.
 function rows() { return [...body.querySelectorAll("tr")]; }
 function rowData(row) {
   return {
-    model: row.querySelector(".model-input").value.trim(),
+    model: row.querySelector(".model-select").value.trim(),
     price: asNumber(row.querySelector(".price-input").value),
     quantity: asNumber(row.querySelector(".quantity-input").value)
   };
 }
 function activeRows() { return rows().map(rowData).filter(item => item.model || item.price || item.quantity); }
 function setSavedState(text = "未保存") { saveState.textContent = text; }
+function getBills() { try { return JSON.parse(localStorage.getItem(storageKey)) || []; } catch { return []; } }
+function saveBills(bills) { localStorage.setItem(storageKey, JSON.stringify(bills)); }
+function getModels() {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(modelsKey)) || []; } catch { saved = []; }
+  const fromHistory = getBills().flatMap(bill => bill.rows.map(item => item.model));
+  return [...new Set([...saved, ...fromHistory].map(model => String(model || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "zh-CN"));
+}
+function rememberModels(models) {
+  const next = [...new Set([...getModels(), ...models].map(model => String(model || "").trim()).filter(Boolean))];
+  localStorage.setItem(modelsKey, JSON.stringify(next));
+}
+function populateModelSelect(select, selected = "") {
+  select.replaceChildren();
+  const placeholder = new Option("选择型号", "");
+  placeholder.disabled = true;
+  select.add(placeholder);
+  const models = getModels();
+  if (selected && !models.includes(selected)) models.push(selected);
+  models.forEach(model => select.add(new Option(model, model)));
+  select.add(new Option("+ 新增型号", "__new__"));
+  select.value = selected || "";
+}
+function setReturnMode(row, isReturn) {
+  row.dataset.returnMode = String(isReturn);
+  const button = row.querySelector(".return-toggle");
+  button.setAttribute("aria-pressed", String(isReturn));
+  button.textContent = isReturn ? "退货中" : "退货";
+}
 
 function addRow(data = {}) {
   const row = rowTemplate.content.firstElementChild.cloneNode(true);
-  row.querySelector(".model-input").value = data.model ?? "";
+  const modelSelect = row.querySelector(".model-select");
+  const quantityInput = row.querySelector(".quantity-input");
+  populateModelSelect(modelSelect, data.model ?? "");
   row.querySelector(".price-input").value = data.price ?? "";
-  row.querySelector(".quantity-input").value = data.quantity ?? "";
-  row.querySelectorAll("input").forEach(input => input.addEventListener("input", () => { setSavedState(); recalculate(); }));
+  quantityInput.value = data.quantity ?? "";
+  setReturnMode(row, asNumber(data.quantity) < 0);
+  row.querySelectorAll("input").forEach(input => input.addEventListener("input", () => {
+    if (input === quantityInput) {
+      const quantity = asNumber(quantityInput.value);
+      const returnMode = row.dataset.returnMode === "true";
+      if (quantity && returnMode && quantity > 0) quantityInput.value = -quantity;
+      if (quantity < 0) setReturnMode(row, true);
+      if (quantity > 0 && !returnMode) setReturnMode(row, false);
+    }
+    setSavedState(); recalculate();
+  }));
+  modelSelect.addEventListener("change", () => {
+    if (modelSelect.value === "__new__") {
+      const model = window.prompt("请输入手机型号");
+      if (model && model.trim()) {
+        const name = model.trim();
+        rememberModels([name]);
+        populateModelSelect(modelSelect, name);
+      } else {
+        modelSelect.value = "";
+      }
+    }
+    setSavedState(); recalculate();
+  });
+  row.querySelector(".return-toggle").addEventListener("click", () => {
+    const isReturn = row.dataset.returnMode !== "true";
+    const quantity = Math.abs(asNumber(quantityInput.value));
+    setReturnMode(row, isReturn);
+    if (quantity) quantityInput.value = isReturn ? -quantity : quantity;
+    setSavedState(); recalculate();
+  });
   row.querySelector(".delete-line").addEventListener("click", () => {
     if (rows().length === 1) {
-      row.querySelectorAll("input").forEach(input => { input.value = ""; });
+      row.querySelectorAll("input, select").forEach(input => { input.value = ""; });
+      setReturnMode(row, false);
     } else { row.remove(); }
     setSavedState(); recalculate();
   });
@@ -103,8 +171,6 @@ function currentBill() {
   };
 }
 function billTotal(bill) { return bill.rows.reduce((sum, item) => sum + item.price * item.quantity, 0); }
-function getBills() { try { return JSON.parse(localStorage.getItem(storageKey)) || []; } catch { return []; } }
-function saveBills(bills) { localStorage.setItem(storageKey, JSON.stringify(bills)); }
 
 function saveCurrentBill() {
   const bill = currentBill();
@@ -113,6 +179,7 @@ function saveCurrentBill() {
   const index = bills.findIndex(item => item.id === bill.id);
   if (index >= 0) bills[index] = bill; else bills.unshift(bill);
   saveBills(bills);
+  rememberModels(bill.rows.map(item => item.model));
   activeSavedId = bill.id;
   saveState.textContent = "已保存到本机";
   renderHistory();
@@ -164,7 +231,7 @@ function newBill() {
   closeHistory();
 }
 
-document.querySelector("#add-line").addEventListener("click", () => { const row = addRow(); row.querySelector(".model-input").focus(); setSavedState(); });
+document.querySelector("#add-line").addEventListener("click", () => { const row = addRow(); row.querySelector(".model-select").focus(); setSavedState(); });
 document.querySelector("#save-bill").addEventListener("click", saveCurrentBill);
 document.querySelector("#new-bill").addEventListener("click", newBill);
 document.querySelector("#history-toggle").addEventListener("click", openHistory);
