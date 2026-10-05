@@ -107,6 +107,12 @@
         </div>
         <button class="icon-button" id="close-history" type="button" aria-label="关闭历史账单">×</button>
       </div>
+      <div class="history-tools">
+        <button class="secondary-action" id="export-backup" type="button">导出备份</button>
+        <button class="secondary-action" id="import-backup" type="button">恢复备份</button>
+        <input id="backup-file" type="file" accept="application/json,.json" hidden />
+      </div>
+      <p class="history-storage" id="history-storage"></p>
       <div class="history-list" id="history-list"></div>
     </aside>
     <div class="scrim" id="scrim" hidden></div>

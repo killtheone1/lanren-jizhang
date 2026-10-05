@@ -12,6 +12,8 @@ const totalQuantity = document.querySelector("#total-quantity");
 const lineCount = document.querySelector("#line-count");
 const historyPanel = document.querySelector("#history-panel");
 const historyList = document.querySelector("#history-list");
+const historyStorage = document.querySelector("#history-storage");
+const backupFile = document.querySelector("#backup-file");
 const scrim = document.querySelector("#scrim");
 let activeSavedId = null;
 
@@ -36,7 +38,9 @@ function rowData(row) {
 function activeRows() { return rows().map(rowData).filter(item => item.model || item.price || item.quantity); }
 function setSavedState(text = "未保存") { saveState.textContent = text; }
 function getBills() { try { return JSON.parse(localStorage.getItem(storageKey)) || []; } catch { return []; } }
-function saveBills(bills) { localStorage.setItem(storageKey, JSON.stringify(bills)); }
+function saveBills(bills) {
+  try { localStorage.setItem(storageKey, JSON.stringify(bills)); return true; } catch { return false; }
+}
 function getModels() {
   let saved = [];
   try { saved = JSON.parse(localStorage.getItem(modelsKey)) || []; } catch { saved = []; }
@@ -45,7 +49,79 @@ function getModels() {
 }
 function rememberModels(models) {
   const next = [...new Set([...getModels(), ...models].map(model => String(model || "").trim()).filter(Boolean))];
-  localStorage.setItem(modelsKey, JSON.stringify(next));
+  try { localStorage.setItem(modelsKey, JSON.stringify(next)); return true; } catch { return false; }
+}
+function storageBytes() {
+  return new Blob([localStorage.getItem(storageKey) || "", localStorage.getItem(modelsKey) || ""]).size;
+}
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+function backupPayload() {
+  return {
+    app: "phone-ledger",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    bills: getBills(),
+    models: getModels()
+  };
+}
+function backupFilename() { return `手机账本备份_${today()}.json`; }
+async function exportBackup() {
+  const blob = new Blob([JSON.stringify(backupPayload(), null, 2)], { type: "application/json" });
+  const file = new File([blob], backupFilename(), { type: "application/json" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "手机账本备份" });
+      saveState.textContent = "备份已打开分享菜单";
+      return;
+    }
+  } catch (error) {
+    if (error.name === "AbortError") return;
+  }
+  const link = document.createElement("a");
+  const objectUrl = URL.createObjectURL(blob);
+  link.href = objectUrl;
+  link.download = backupFilename();
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  saveState.textContent = "备份文件已导出";
+}
+function mergeBackup(payload) {
+  if (!payload || payload.app !== "phone-ledger" || !Array.isArray(payload.bills)) throw new Error("invalid-backup");
+  const current = getBills();
+  const merged = new Map(current.map(bill => [bill.id, bill]));
+  payload.bills.forEach(bill => {
+    if (bill && typeof bill === "object" && Array.isArray(bill.rows)) {
+      const id = typeof bill.id === "string" && bill.id ? bill.id : crypto.randomUUID();
+      merged.set(id, { ...bill, id });
+    }
+  });
+  const bills = [...merged.values()].sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+  if (!saveBills(bills)) throw new Error("storage-full");
+  rememberModels([...(Array.isArray(payload.models) ? payload.models : []), ...bills.flatMap(bill => bill.rows.map(row => row.model))]);
+  renderHistory();
+  saveState.textContent = `已恢复 ${payload.bills.length} 张账单`;
+}
+function importBackup(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const payload = JSON.parse(reader.result);
+      if (!payload || !Array.isArray(payload.bills)) throw new Error("invalid-backup");
+      if (!window.confirm(`将合并恢复 ${payload.bills.length} 张账单，当前账单不会删除。是否继续？`)) return;
+      mergeBackup(payload);
+    } catch (error) {
+      saveState.textContent = error.message === "storage-full" ? "本机空间不足，请先导出备份" : "备份文件无法识别";
+    }
+    backupFile.value = "";
+  };
+  reader.onerror = () => { saveState.textContent = "读取备份文件失败"; backupFile.value = ""; };
+  reader.readAsText(file, "utf-8");
 }
 function populateModelSelect(select, selected = "") {
   select.replaceChildren();
@@ -178,7 +254,7 @@ function saveCurrentBill() {
   const bills = getBills();
   const index = bills.findIndex(item => item.id === bill.id);
   if (index >= 0) bills[index] = bill; else bills.unshift(bill);
-  saveBills(bills);
+  if (!saveBills(bills)) { saveState.textContent = "本机空间不足，请先导出备份"; return; }
   rememberModels(bill.rows.map(item => item.model));
   activeSavedId = bill.id;
   saveState.textContent = "已保存到本机";
@@ -197,6 +273,7 @@ function loadBill(bill) {
 }
 function renderHistory() {
   const bills = getBills();
+  historyStorage.textContent = `本机账单占用约 ${formatBytes(storageBytes())}；建议每月导出一次备份。`;
   historyList.replaceChildren();
   if (!bills.length) {
     const empty = document.createElement("p");
@@ -236,6 +313,9 @@ document.querySelector("#save-bill").addEventListener("click", saveCurrentBill);
 document.querySelector("#new-bill").addEventListener("click", newBill);
 document.querySelector("#history-toggle").addEventListener("click", openHistory);
 document.querySelector("#close-history").addEventListener("click", closeHistory);
+document.querySelector("#export-backup").addEventListener("click", exportBackup);
+document.querySelector("#import-backup").addEventListener("click", () => backupFile.click());
+backupFile.addEventListener("change", () => { if (backupFile.files[0]) importBackup(backupFile.files[0]); });
 scrim.addEventListener("click", closeHistory);
 document.querySelector("#print-bill").addEventListener("click", () => window.print());
 [customerName, billDate, billNumber].forEach(input => input.addEventListener("input", () => setSavedState()));
